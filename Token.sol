@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+// IGNORE THIS FILE FOR MVP - TOKEN ONLY APPLIES FOR NFT FRATIONALIZATION 
+
 import "./utils/ERC20/ERC20.sol";
 import "./utils/Ownable.sol";
 
