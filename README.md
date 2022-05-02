@@ -1,4 +1,4 @@
-# Project Title
+# The-Merged-Market
 
 The merged marketplace is an NFT marketplace developed with the intention of becoming a permissionless, decentralized application for the sale and purchase of digital tokenized products across multiple blockchains. 
 
@@ -56,5 +56,4 @@ Owen Robertson
 
 Inspiration, code snippets, etc.
 * [academy-cryptokitties](https://github.com/Ivan-on-Tech-Academy/academy-cryptokitties)
-* [nft_royalties](https://github.com/dappuniversity/nft_royalties)
-# The-Merged-Market
+* [nft_marketplace](https://github.com/dappuniversity/nft_marketplace)
