@@ -13,158 +13,190 @@ import "./utils/ReentrancyGuard.sol";
 pragma solidity >=0.7.0 <0.9.0;
 
 contract Marketplace is ReentrancyGuard {
-
     // Variables
     address payable public immutable feeAccount; // the account that receives fees
-    uint public immutable feePercent; // the fee percentage on sales 
-    uint public listingsCount; // *changed name from itemCount
+    uint256 public immutable feePercent; // the fee percentage on sales
+    uint256 public listingsCount; // the total number of listings thats been listed on the market. Like a listing history
 
-    // *change Item to Listing
+    // Struct for the listing
     struct Listing {
-        uint listingId;
-        IERC721 nft;
-        uint tokenId;
-        uint price;
-        address payable seller;
-        bool sold;
-        bool active;
-        uint256 index;
+        uint256 listingId; // the id of the listing. First listing = ID 1
+        IERC721 nft; // nft object
+        uint256 tokenId; // the id of the token.
+        uint256 price; // the price of the listing
+        address payable seller; // who posted the listing (whos selling the nft)
+        bool sold; // if the listing has been sold or not
+        bool active; // if the listing is actually on the marketplace or not. Can be inactive AND not sold.
+        uint256 index; // index that the listing is in, in the listing array.
     }
 
+    // Struct for the offer
     struct Offer {
-        uint offerId;
-        uint listingId;
-        uint price;
-        address payable buyer;
-        bool accepted;
-        bool active;
-        uint256 index;
+        uint256 offerId; // the id of the offer. First offer = id 1
+        uint256 listingId; // the id of the listing we are making an offer on
+        uint256 price; // the price that is being offered
+        address payable buyer; // who posted the offer (who wants to buy the nft)
+        bool accepted; // if the offer was accepted by the seller
+        bool active; // if the offer is on the marketplace
+        uint256 index; // index that the offer is in, in the offer array
     }
-    
-    // storage for all listings created
+
+    // storage array for all listings created
     Listing[] listings;
-    // storage for all offers created
+    // storage array for all offers created
     Offer[] offers;
 
-    // mapping for locating listings currently on sale: listingId -> listing
-    mapping(uint => Listing) public listingsForSale;
-    // mapping for locating listing associated with tokenId: tokenId -> listingId ****
-    mapping(uint => uint) public tokenListings;
-
-    // mapping for locating offers that are active: offerId -> offer
-    mapping(uint => Offer) public pendingOffers;
+    // Enter the listing id, get back the Listing Struct. Only valid for listings currently on sale.
+    mapping(uint256 => Listing) public listingsForSale;
+    // Enter the tokenid, get back the listingId associated with the token
+    mapping(uint256 => uint256) public tokenListings;
+    // Enter offerId, get back the Offer struct. Only valid for offers that are currently active.
+    mapping(uint256 => Offer) public pendingOffers;
 
     // Events
     event setListing(
-        uint listingId,
+        uint256 listingId,
         address indexed nft,
-        uint tokenId,
-        uint price,
+        uint256 tokenId,
+        uint256 price,
         address indexed seller
     );
 
-    event endListing(
-        uint listingId,
-        address indexed nft,
-        uint tokenId
-    );
+    event endListing(uint256 listingId, address indexed nft, uint256 tokenId);
 
     event madeOffer(
-        uint listingId,
+        uint256 listingId,
         address indexed nft,
-        uint tokenId,
-        uint price,
+        uint256 tokenId,
+        uint256 price,
         address indexed buyer
     );
 
-    event removedOffer(
-        uint listingId,
-        address indexed buyer
-    );
+    event removedOffer(uint256 listingId, address indexed buyer);
 
     event acceptedOffer(
-        uint offerId,
-        uint listingId,
+        uint256 offerId,
+        uint256 listingId,
         address indexed nft,
-        uint price
+        uint256 price
     );
 
     event Bought(
-        uint listingId,
+        uint256 listingId,
         address indexed nft,
-        uint tokenId,
-        uint price,
+        uint256 tokenId,
+        uint256 price,
         address indexed seller,
         address indexed buyer
     );
 
-    constructor(uint _feePercent) {
-        feeAccount = payable(msg.sender);
-        feePercent = _feePercent;
+    // Constructor runs when marketplace contract is deployed
+    constructor(uint256 _feePercent) {
+        feeAccount = payable(msg.sender); // Fee account is whatever deployed the contract
+        feePercent = _feePercent; // fee percent specified in the parameters
     }
 
-    // Make listing to offer on the marketplace
-    function createListing(IERC721 _nft, uint _tokenId, uint _price) external nonReentrant {
-        require(_price > 0.009 ether, "Price must be greater than 0.01");
-        
-        // increment listingsCount
-        listingsCount ++;
-        // transfer nft
+    // Create an NFT listing
+    function createListing(
+        IERC721 _nft,
+        uint256 _tokenId,
+        uint256 _price
+    ) external nonReentrant {
+        require(_price > 0.009 ether, "Price must be greater than 0.01"); // Price of nft must be greater than .01
+
+        // Increment listings count
+        listingsCount++;
+        // Transfer NFT from the sender to the marketplace
         _nft.transferFrom(msg.sender, address(this), _tokenId);
-        // add new listing to listings mapping
+        // Create new Listing struct
         Listing memory newListing = Listing(
-            listingsCount,
-            _nft,
-            _tokenId,
-            _price,
-            payable(msg.sender),
-            false,
-            true,
-            listings.length
+            listingsCount, // listingID or the new listing
+            _nft, // nft of the listing
+            _tokenId, // tokenId associated with NFT
+            _price, // price of listing
+            payable(msg.sender), // who will receive the money if someone buys the NFT
+            false, // sold = false
+            true, // active = true
+            listings.length // index is the length of the listing array. MIGHT have to do -1, because this isnt the true index since arrays are 0 indexed
         );
 
-        // add listnig to storage
+        // Add the listing struct to the listings array
         listings.push(newListing);
+        // Add listingsCount -> newListing to the mapping
         listingsForSale[listingsCount] = newListing;
-        
+
         // emit listing creation event
-        emit setListing(listingsCount, address(_nft), _tokenId, _price, msg.sender);
+        emit setListing(
+            listingsCount,
+            address(_nft),
+            _tokenId,
+            _price,
+            msg.sender
+        );
     }
 
-    function purchaseListing(uint _listingId) public payable nonReentrant {
-        uint _totalPrice = getTotalPrice(_listingId);
+    // Purchase a listing on the market
+    function purchaseListing(uint256 _listingId) public payable nonReentrant {
+        // Get total price required for the listing
+        uint256 _totalPrice = getTotalPrice(_listingId);
+        // Get the listing from the mapping.
         Listing storage listing = listingsForSale[_listingId];
-        require(_listingId > 0 && _listingId <= listingsCount, "listing doesn't exist");
-        require(msg.value >= _totalPrice, "not enough ether to cover listing price and market fee");
+        // Check if listing actually exists
+        require(
+            _listingId > 0 && _listingId <= listingsCount,
+            "listing doesn't exist"
+        );
+        // Check if the buyer sent enough funds
+        require(
+            msg.value >= _totalPrice,
+            "not enough ether to cover listing price and market fee"
+        );
+        // Check if the listing hasn't been sold
         require(!listing.sold, "listing already sold");
-        
-        // pay seller and feeAccount
+        // Check if the listing is active
+        require(listing.active, "listing is inactive");
+
+        // Transfer funds from the buyer directly to the seller
         listing.seller.transfer(listing.price);
+        // Transfer fees from the buyer to the marketplace
         feeAccount.transfer(_totalPrice - listing.price);
-        // update listing to sold
+
+        // maybe we can add code that returns extra money sent if there was?
+
+        // Update listing to sold
         listing.sold = true;
-        // transfer nft to buyer
+        // Update listing to inactive. Its sold, cant be sold again
+        listing.active = false;
+        // Transfer the actual NFT to the buyer
         listing.nft.transferFrom(address(this), msg.sender, listing.tokenId);
-        
+
         // emit purchased listing event
-        emit Bought(_listingId, address(listing.nft), listing.tokenId, listing.price, listing.seller, msg.sender);
+        emit Bought(
+            _listingId,
+            address(listing.nft),
+            listing.tokenId,
+            listing.price,
+            listing.seller,
+            msg.sender
+        );
     }
 
+    // Remove listing on the market. Have to be the owner of the listing
     function removeListing(uint256 _listingId) public {
-        //require that msg.sender is owner of nft listing to remove listing
+        // Get the listing
         Listing memory listing = listingsForSale[_listingId];
+        // Check if sender is the owner of the listing
         require(
-            listing.seller == msg.sender, 
+            listing.seller == msg.sender,
             "You cannot remove a listing of an NFT you do not own."
-            );
-        require(
-            !listing.sold, 
-            "lisitng is already sold, you cannot remove."
-            );
-        // remove listing from storage
+        );
+        // Check if the listing is sold
+        require(!listing.sold, "lisitng is already sold, you cannot remove.");
+        // Remove listing from the mapping. No way for anyone to access it now
         delete listingsForSale[listing.listingId];
+        // Make listing struct inactive
         listings[listingsForSale[_listingId].index].active = false;
-        
+
         // emit remove listing event
         emit endListing(_listingId, address(listing.nft), listing.tokenId);
     }
@@ -173,10 +205,22 @@ contract Marketplace is ReentrancyGuard {
      * Allow buyers to make a bid on the listing with an offer
      */
     function makeOffer(uint256 _offerPrice, uint256 _listingId) public {
+        // Get the listing
         Listing memory listing = listingsForSale[_listingId];
-        require(msg.sender != listing.seller, "You cannot make a bid on your own NFT");
+        // Make sure the person isnt trying to bid on his own nft
+        require(
+            msg.sender != listing.seller,
+            "You cannot make a bid on your own NFT"
+        );
+        // Make sure the offer price is greater than 0
         require(_offerPrice > 0, "Your bid must be greater than 0");
+        // Make sure listing isn't already sold
+        require(
+            !listing.sold,
+            "lisitng is already sold, you can't make a bid on it."
+        );
 
+        // Make the offer struct
         Offer memory _offer = Offer(
             offers.length,
             _listingId,
@@ -192,7 +236,13 @@ contract Marketplace is ReentrancyGuard {
         offers.push(_offer);
 
         // emit offer creation event
-        emit madeOffer(_listingId, address(listing.nft), listing.tokenId, _offerPrice, msg.sender);
+        emit madeOffer(
+            _listingId,
+            address(listing.nft),
+            listing.tokenId,
+            _offerPrice,
+            msg.sender
+        );
     }
 
     /*
@@ -203,14 +253,14 @@ contract Marketplace is ReentrancyGuard {
         Offer memory offer = pendingOffers[_offerId];
         Listing memory listing = listingsForSale[offer.listingId];
         require(
-            offer.buyer == msg.sender || listing.seller == msg.sender, 
+            offer.buyer == msg.sender || listing.seller == msg.sender,
             "You must be the NFT owner or creator of the offer to remove an offer."
         );
         require(
-            !offer.accepted, 
+            !offer.accepted,
             "Offer is already accepted, you cannot remove."
         );
-        
+
         // update offer mapping -> IMPORTANT: remove the offer form the mapping BEFORE sending funds to prevent reentry attacks
         delete pendingOffers[_offerId];
         offers[pendingOffers[_offerId].index].active = false;
@@ -218,7 +268,7 @@ contract Marketplace is ReentrancyGuard {
         // emit event for offer removal
         emit removedOffer(offer.listingId, msg.sender);
     }
-    
+
     /*
      * Allow sellers to accept an offer made for their listing
      */
@@ -227,10 +277,10 @@ contract Marketplace is ReentrancyGuard {
         Offer memory offer = pendingOffers[_offerId];
         Listing memory listing = listingsForSale[offer.listingId];
         require(
-            msg.sender == listing.seller, 
+            msg.sender == listing.seller,
             "You cannot accept an offer on a listing that you do not own"
         );
-        
+
         // purchase listing
         purchaseListing(offer.listingId);
 
@@ -239,13 +289,22 @@ contract Marketplace is ReentrancyGuard {
         offers[pendingOffers[_offerId].index].active = false;
 
         // emit event of an accepted offer
-        emit acceptedOffer(_offerId, offer.listingId, address(listing.nft), offer.price);
+        emit acceptedOffer(
+            _offerId,
+            offer.listingId,
+            address(listing.nft),
+            offer.price
+        );
     }
 
     /*
      * Display all listings for sale
      */
-    function getAllListings() public view returns(uint256[] memory allListings) {
+    function getAllListings()
+        public
+        view
+        returns (uint256[] memory allListings)
+    {
         if (listingsCount == 0) {
             return new uint256[](0);
         } else {
@@ -254,7 +313,7 @@ contract Marketplace is ReentrancyGuard {
             uint256 listingId;
 
             for (listingId = 0; listingId < listingsCount; listingId++) {
-                if(listings[listingId].price != 0) {
+                if (listings[listingId].price != 0) {
                     tokenResults[listingId] = listings[listingId].index;
                 }
             }
@@ -265,7 +324,11 @@ contract Marketplace is ReentrancyGuard {
     /*
      * Display all users listings for sale
      */
-    function getUsersListings() public view returns(uint256[] memory usersListings) {
+    function getUsersListings()
+        public
+        view
+        returns (uint256[] memory usersListings)
+    {
         if (listingsCount == 0) {
             return new uint256[](0);
         } else {
@@ -274,7 +337,10 @@ contract Marketplace is ReentrancyGuard {
             uint256 listingId;
 
             for (listingId = 0; listingId < listingsCount; listingId++) {
-                if(listings[listingId].price != 0 && listings[listingId].seller == msg.sender) {
+                if (
+                    listings[listingId].price != 0 &&
+                    listings[listingId].seller == msg.sender
+                ) {
                     usersResults[listingId] = listings[listingId].index;
                 }
             }
@@ -282,7 +348,7 @@ contract Marketplace is ReentrancyGuard {
         }
     }
 
-    function getTotalPrice(uint _listingId) view public returns(uint){
-        return((listings[_listingId].price*(100 + feePercent))/100);
+    function getTotalPrice(uint256 _listingId) public view returns (uint256) {
+        return ((listings[_listingId].price * (100 + feePercent)) / 100);
     }
 }
