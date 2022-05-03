@@ -186,7 +186,6 @@ contract Marketplace is ReentrancyGuard {
 
     // Remove listing on the market. Have to be the owner of the listing
     function removeListing(uint256 _listingId) public {
-
         require(
             _listingId > 0 && _listingId <= listingsCount,
             "listing doesn't exist"
@@ -214,14 +213,10 @@ contract Marketplace is ReentrancyGuard {
      * Allow buyers to make a bid on the listing with an offer
      */
     function makeOffer(uint256 _offerPrice, uint256 _listingId) public {
-
         require(
             _listingId > 0 && _listingId <= listingsCount,
             "listing doesn't exist"
         );
-
-        // The offer has to have a price of at least the market fees
-        uint256 _totalPrice = getTotalPrice(_listingId);
 
 
         // Get the listing
@@ -232,7 +227,8 @@ contract Marketplace is ReentrancyGuard {
             "You cannot make a bid on your own NFT"
         );
         uint256 totalOfferPrice = getOfferTotalPrice(_offerPrice);
-        uint _offerPriceCheck = totalOfferPrice - (feePercent * totalOfferPrice);
+        uint256 _offerPriceCheck = totalOfferPrice -
+            (feePercent * totalOfferPrice);
         // Make sure the offer price is greater than 0
         require(_offerPriceCheck > 0, "Your bid must be greater than 0");
         // Make sure listing isn't already sold
@@ -272,10 +268,7 @@ contract Marketplace is ReentrancyGuard {
      * Allow sellers to remove an offer that is unsatisfactory and buyers to remove an offer they made previously
      */
     function removeOffer(uint256 _offerId) public {
-        require(
-            _offerId > 0 && _offerId <= offersCount,
-            "offer doesn't exist"
-        );
+        require(_offerId > 0 && _offerId <= offersCount, "offer doesn't exist");
         Offer memory offer = activeOffers[_offerId];
         Listing memory listing = listingsForSale[offer.listingId];
         // require msg.sender to be owner of offer or msg.sender to be the owner of the listingID
@@ -303,14 +296,9 @@ contract Marketplace is ReentrancyGuard {
     function acceptOffer(uint256 _offerId) public payable nonReentrant {
         //require that msg.sender is owner of the listing to accept offer
 
-        require(
-            _offerId > 0 && _offerId <= offersCount,
-            "offer doesn't exist"
-        );
+        require(_offerId > 0 && _offerId <= offersCount, "offer doesn't exist");
 
         Offer memory offer = activeOffers[_offerId];
-        uint256 price = offer.price;
-        address buyer_address = offer.buyer;
         Listing memory listing = listingsForSale[offer.listingId];
         require(
             msg.sender == listing.seller,
@@ -340,7 +328,7 @@ contract Marketplace is ReentrancyGuard {
         listing.active = false;
 
         // remove offer from storage
-        delete pendingOffers[_offerId];
+        delete activeOffers[_offerId];
         offer.active = false;
         offer.accepted = true;
 
@@ -348,7 +336,7 @@ contract Marketplace is ReentrancyGuard {
         listing.nft.transferFrom(address(this), msg.sender, listing.tokenId);
 
         // Transfer funds from the buyer directly to the seller
-        listing.seller.transfer(offer.price);
+        listing.seller.transfer(offer.price - (feePercent * offer.price));
         // Transfer fees from the buyer to the marketplace
         feeAccount.transfer(_totalPrice - offer.price);
 
@@ -375,7 +363,11 @@ contract Marketplace is ReentrancyGuard {
         return ((listings[_listingId].price * (100 + feePercent)) / 100);
     }
 
-    function getOfferTotalPrice(uint256 _offerId) public view returns (uint256) {
-        return((offers[_offerId].price * (100 + feePercent)) / 100);
+    function getOfferTotalPrice(uint256 _offerId)
+        public
+        view
+        returns (uint256)
+    {
+        return ((offers[_offerId].price * (100 + feePercent)) / 100);
     }
 }
