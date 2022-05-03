@@ -226,9 +226,9 @@ contract Marketplace is ReentrancyGuard {
             msg.sender != listing.seller,
             "You cannot make a bid on your own NFT"
         );
+        
         uint256 totalOfferPrice = getOfferTotalPrice(_offerPrice);
-        uint256 _offerPriceCheck = totalOfferPrice -
-            (feePercent * totalOfferPrice);
+        uint256 _offerPriceCheck = totalOfferPrice - (feePercent * totalOfferPrice);
         // Make sure the offer price is greater than 0
         require(_offerPriceCheck > 0, "Your bid must be greater than 0");
         // Make sure listing isn't already sold
@@ -237,7 +237,7 @@ contract Marketplace is ReentrancyGuard {
             "lisitng is already sold, you can't make a bid on it."
         );
 
-        offersCount += 1;
+        offersCount++;
 
         // Make the offer struct
         Offer memory _offer = Offer(
@@ -295,7 +295,6 @@ contract Marketplace is ReentrancyGuard {
      */
     function acceptOffer(uint256 _offerId) public payable nonReentrant {
         //require that msg.sender is owner of the listing to accept offer
-
         require(_offerId > 0 && _offerId <= offersCount, "offer doesn't exist");
 
         Offer memory offer = activeOffers[_offerId];
@@ -305,14 +304,14 @@ contract Marketplace is ReentrancyGuard {
             "You cannot accept an offer on a listing that you do not own"
         );
         // Get total price required for the listing
-        uint256 _totalPrice = getOfferTotalPrice(_offerId);
+        uint256 totalPrice = getOfferTotalPrice(_offerId);
         require(
             _offerId > 0 && _offerId <= offersCount,
             "Offer does not exist"
         );
         // Check if the buyer sent enough funds
         require(
-            msg.value >= _totalPrice,
+            msg.value >= totalPrice,
             "not enough ether to cover listing price and market fee"
         );
         // Check if the listing hasn't been sold
@@ -328,9 +327,9 @@ contract Marketplace is ReentrancyGuard {
         listing.active = false;
 
         // remove offer from storage
-        delete activeOffers[_offerId];
         offer.active = false;
         offer.accepted = true;
+        delete activeOffers[_offerId];
 
         // Transfer the actual NFT to the buyer
         listing.nft.transferFrom(address(this), msg.sender, listing.tokenId);
@@ -338,7 +337,7 @@ contract Marketplace is ReentrancyGuard {
         // Transfer funds from the buyer directly to the seller
         listing.seller.transfer(offer.price - (feePercent * offer.price));
         // Transfer fees from the buyer to the marketplace
-        feeAccount.transfer(_totalPrice - offer.price);
+        feeAccount.transfer(totalPrice - offer.price);
 
         // emit event of an accepted offer
         emit acceptedOffer(
@@ -363,11 +362,7 @@ contract Marketplace is ReentrancyGuard {
         return ((listings[_listingId].price * (100 + feePercent)) / 100);
     }
 
-    function getOfferTotalPrice(uint256 _offerId)
-        public
-        view
-        returns (uint256)
-    {
+    function getOfferTotalPrice(uint256 _offerId) public view returns (uint256) {
         return ((offers[_offerId].price * (100 + feePercent)) / 100);
     }
 }
