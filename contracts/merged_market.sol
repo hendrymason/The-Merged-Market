@@ -109,8 +109,6 @@ contract Marketplace is ReentrancyGuard {
 
         // Increment listings count
         listingsCount++;
-        // Transfer NFT from the sender to the marketplace
-        _nft.transferFrom(msg.sender, address(this), _tokenId);
         // Create new Listing struct
         Listing memory newListing = Listing(
             listingsCount, // listingID or the new listing
@@ -127,6 +125,9 @@ contract Marketplace is ReentrancyGuard {
         listings.push(newListing);
         // Add listingsCount -> newListing to the mapping
         listingsForSale[listingsCount] = newListing;
+
+        // Transfer NFT from the sender to the marketplace
+        _nft.transferFrom(msg.sender, address(this), _tokenId);
 
         // emit listing creation event
         emit setListing(
