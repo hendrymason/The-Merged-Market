@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 
-// For batch minting compatibility & royalties compatibility
 import "./utils/Context.sol";
 import "./utils/Ownable.sol";
 import "./utils/ERC165/IERC165.sol";
@@ -16,26 +15,13 @@ import "./utils/Address.sol";
 
 pragma solidity >=0.7.0 <0.9.0;
 
-// NFT 1.0
-// contract NFT is ERC721URIStorage {
-//     uint public tokenCount;
-//     constructor() ERC721("DApp NFT", "DAPP"){}
-//     function mint(string memory _tokenURI) external returns(uint) {
-//         tokenCount ++;
-//         _safeMint(msg.sender, tokenCount);
-//         _setTokenURI(tokenCount, _tokenURI);
-//         return(tokenCount);
-//     }
-// }
-
 contract NFT is ERC721Enumerable, Ownable {
     using Strings for uint256;
 
-    uint256 public cost = 1 ether;
-    uint256 public maxSupply = 20;
-
     string baseURI;
     string public baseExtension = ".json";
+    uint256 public cost = 1 ether;
+    uint256 public maxSupply = 20;
 
     constructor(
         string memory _name,
@@ -45,7 +31,12 @@ contract NFT is ERC721Enumerable, Ownable {
         setBaseURI(_initBaseURI);
     }
 
-    // Public functions
+    // internal
+    function _baseURI() internal view virtual override returns (string memory) {
+        return baseURI;
+    }
+
+    // public
     function mint() public payable {
         uint256 supply = totalSupply();
         require(supply <= maxSupply);
@@ -55,6 +46,19 @@ contract NFT is ERC721Enumerable, Ownable {
         }
 
         _safeMint(msg.sender, supply + 1);
+    }
+
+    function walletOfOwner(address _owner)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        uint256 ownerTokenCount = balanceOf(_owner);
+        uint256[] memory tokenIds = new uint256[](ownerTokenCount);
+        for (uint256 i; i < ownerTokenCount; i++) {
+            tokenIds[i] = tokenOfOwnerByIndex(_owner, i);
+        }
+        return tokenIds;
     }
 
     function tokenURI(uint256 tokenId)
@@ -82,13 +86,19 @@ contract NFT is ERC721Enumerable, Ownable {
                 : "";
     }
 
-    // Internal functions
-    function _baseURI() internal view virtual override returns (string memory) {
-        return baseURI;
+    // Only owner
+    function setCost(uint256 _newCost) public onlyOwner {
+        cost = _newCost;
     }
 
-    // Owner functions
     function setBaseURI(string memory _newBaseURI) public onlyOwner {
         baseURI = _newBaseURI;
+    }
+
+    function withdraw() public payable onlyOwner {
+        (bool success, ) = payable(msg.sender).call{
+            value: address(this).balance
+        }("");
+        require(success);
     }
 }
