@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-import "./utils/ERC20/ERC20.sol";
-import "./utils/Ownable.sol";
+import "../utils/ERC20/ERC20.sol";
+import "../utils/Ownable.sol";
 
-import "./NFT_2.0.sol";
+import "./NFT_Fractionalized.sol";
 
 pragma solidity >=0.7.0 <0.9.0;
 
