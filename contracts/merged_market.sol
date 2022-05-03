@@ -255,7 +255,7 @@ contract Marketplace is ReentrancyGuard {
 
             for (listingId = 0; listingId < listingsCount; listingId++) {
                 if(listings[listingId].price != 0) {
-                    tokenResults[listingId] = listings[listingId].index;
+                    tokenResults[listingId] = listings[listingId].tokenId;
                 }
             }
             return tokenResults;
@@ -275,7 +275,7 @@ contract Marketplace is ReentrancyGuard {
 
             for (listingId = 0; listingId < listingsCount; listingId++) {
                 if(listings[listingId].price != 0 && listings[listingId].seller == msg.sender) {
-                    usersResults[listingId] = listings[listingId].index;
+                    usersResults[listingId] = listings[listingId].tokenId;
                 }
             }
             return usersResults;
