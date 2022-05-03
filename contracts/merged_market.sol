@@ -17,6 +17,7 @@ contract Marketplace is ReentrancyGuard {
     address payable public immutable feeAccount; // the account that receives fees
     uint256 public immutable feePercent; // the fee percentage on sales
     uint256 public listingsCount; // the total number of listings thats been listed on the market. Like a listing history
+    uint256 public offersCount; // the total number of offers ever.
 
     // Struct for the listing
     struct Listing {
@@ -46,12 +47,13 @@ contract Marketplace is ReentrancyGuard {
     // storage array for all offers created
     Offer[] offers;
 
+    // MAPPING ONLY DELETED IF THE THING BECOMES INACTIVE OR REMOVED. SOLD STUFF STAYS MAPPED
     // Enter the listing id, get back the Listing Struct. Only valid for listings currently on sale.
     mapping(uint256 => Listing) public listingsForSale;
     // Enter the tokenid, get back the listingId associated with the token
     mapping(uint256 => uint256) public tokenListings;
     // Enter offerId, get back the Offer struct. Only valid for offers that are currently active.
-    mapping(uint256 => Offer) public pendingOffers;
+    mapping(uint256 => Offer) public activeOffers;
 
     // Events
     event setListing(
@@ -183,6 +185,12 @@ contract Marketplace is ReentrancyGuard {
 
     // Remove listing on the market. Have to be the owner of the listing
     function removeListing(uint256 _listingId) public {
+
+        require(
+            _listingId > 0 && _listingId <= listingsCount,
+            "listing doesn't exist"
+        );
+
         // Get the listing
         Listing memory listing = listingsForSale[_listingId];
         // Check if sender is the owner of the listing
@@ -192,10 +200,10 @@ contract Marketplace is ReentrancyGuard {
         );
         // Check if the listing is sold
         require(!listing.sold, "lisitng is already sold, you cannot remove.");
-        // Remove listing from the mapping. No way for anyone to access it now
-        delete listingsForSale[listing.listingId];
         // Make listing struct inactive
         listings[listingsForSale[_listingId].index].active = false;
+        // Remove listing from the mapping. No way for anyone to access it now
+        delete listingsForSale[listing.listingId];
 
         // emit remove listing event
         emit endListing(_listingId, address(listing.nft), listing.tokenId);
@@ -205,6 +213,16 @@ contract Marketplace is ReentrancyGuard {
      * Allow buyers to make a bid on the listing with an offer
      */
     function makeOffer(uint256 _offerPrice, uint256 _listingId) public {
+
+        require(
+            _listingId > 0 && _listingId <= listingsCount,
+            "listing doesn't exist"
+        );
+
+        // The offer has to have a price of at least the market fees
+        uint256 _totalPrice = getTotalPrice(_listingId);
+
+
         // Get the listing
         Listing memory listing = listingsForSale[_listingId];
         // Make sure the person isnt trying to bid on his own nft
@@ -212,13 +230,17 @@ contract Marketplace is ReentrancyGuard {
             msg.sender != listing.seller,
             "You cannot make a bid on your own NFT"
         );
-        // Make sure the offer price is greater than 0
-        require(_offerPrice > 0, "Your bid must be greater than 0");
+
+        // Make sure the offer price is greater than or equal to the market fees
+        require(_offerPrice >= _totalPrice - listing.price, "Your bid must be greater than or equal to the market fees");
+
         // Make sure listing isn't already sold
         require(
             !listing.sold,
             "lisitng is already sold, you can't make a bid on it."
         );
+
+        offersCount += 1;
 
         // Make the offer struct
         Offer memory _offer = Offer(
@@ -231,8 +253,8 @@ contract Marketplace is ReentrancyGuard {
             offers.length
         );
 
-        // place offer in storage
-        pendingOffers[_offer.offerId] = _offer;
+        // place offer in storage (array and mapping)
+        activeOffers[_offer.offerId] = _offer;
         offers.push(_offer);
 
         // emit offer creation event
@@ -249,21 +271,26 @@ contract Marketplace is ReentrancyGuard {
      * Allow sellers to remove an offer that is unsatisfactory and buyers to remove an offer they made previously
      */
     function removeOffer(uint256 _offerId) public {
-        //require msg.sender to be owner of offer
-        Offer memory offer = pendingOffers[_offerId];
+        require(
+            _offerId > 0 && _offerId <= offersCount,
+            "offer doesn't exist"
+        );
+        Offer memory offer = activeOffers[_offerId];
         Listing memory listing = listingsForSale[offer.listingId];
+        // require msg.sender to be owner of offer or msg.sender to be the owner of the listingID
         require(
             offer.buyer == msg.sender || listing.seller == msg.sender,
             "You must be the NFT owner or creator of the offer to remove an offer."
         );
+        // If offer accepted, cant remove
         require(
             !offer.accepted,
             "Offer is already accepted, you cannot remove."
         );
 
         // update offer mapping -> IMPORTANT: remove the offer form the mapping BEFORE sending funds to prevent reentry attacks
-        delete pendingOffers[_offerId];
-        offers[pendingOffers[_offerId].index].active = false;
+        offers[activeOffers[_offerId].index].active = false;
+        delete activeOffers[_offerId];
 
         // emit event for offer removal
         emit removedOffer(offer.listingId, msg.sender);
@@ -274,19 +301,38 @@ contract Marketplace is ReentrancyGuard {
      */
     function acceptOffer(uint256 _offerId) public {
         //require that msg.sender is owner of the listing to accept offer
-        Offer memory offer = pendingOffers[_offerId];
+
+        require(
+            _offerId > 0 && _offerId <= offersCount,
+            "offer doesn't exist"
+        );
+
+        Offer memory offer = activeOffers[_offerId];
+        uint256 price = offer.price;
+        address buyer_address = offer.buyer;
         Listing memory listing = listingsForSale[offer.listingId];
         require(
             msg.sender == listing.seller,
             "You cannot accept an offer on a listing that you do not own"
         );
 
-        // purchase listing
-        purchaseListing(offer.listingId);
+        // need to account for the market fees and stuff
+        // Transfer buyers money from their wallet to the listing owners wall
+        token.transferFrom(buyer_address, listing.seller, price);
+
+
+
+
+        // Make listing sold and stuff
+        // Make offer inactive and explain
+
+        // purchase listing. Maybe create a new function?
+        purchaseListing(offer.listingId, );
 
         // remove offer from storage
-        delete pendingOffers[_offerId];
-        offers[pendingOffers[_offerId].index].active = false;
+        offers[activeOffers[_offerId].index].active = false;
+        offers[activeOffers[_offerId].index].accepted = true;
+        delete activeOffers[_offerId];
 
         // emit event of an accepted offer
         emit acceptedOffer(
@@ -313,7 +359,7 @@ contract Marketplace is ReentrancyGuard {
             uint256 listingId;
 
             for (listingId = 0; listingId < listingsCount; listingId++) {
-                if(listings[listingId].price != 0) {
+                if (listings[listingId].price != 0) {
                     tokenResults[listingId] = listings[listingId].tokenId;
                 }
             }
@@ -337,7 +383,10 @@ contract Marketplace is ReentrancyGuard {
             uint256 listingId;
 
             for (listingId = 0; listingId < listingsCount; listingId++) {
-                if(listings[listingId].price != 0 && listings[listingId].seller == msg.sender) {
+                if (
+                    listings[listingId].price != 0 &&
+                    listings[listingId].seller == msg.sender
+                ) {
                     usersResults[listingId] = listings[listingId].tokenId;
                 }
             }
