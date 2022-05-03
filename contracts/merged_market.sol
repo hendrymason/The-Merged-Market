@@ -54,7 +54,7 @@ contract Marketplace is ReentrancyGuard {
     mapping(uint256 => Offer) public activeOffers;
 
     // (unused, may use at future instance) -> Enter the tokenid, get back the listingId associated with the token
-    mapping(uint256 => uint256) public tokenListings;
+    //mapping(uint256 => uint256) public tokenListings;
 
     // Events
     event setListing(
