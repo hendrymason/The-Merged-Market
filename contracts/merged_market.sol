@@ -17,6 +17,7 @@ contract Marketplace is ReentrancyGuard {
     address payable public immutable feeAccount; // the account that receives fees
     uint256 public immutable feePercent; // the fee percentage on sales
     uint256 public listingsCount; // the total number of listings thats been listed on the market. Like a listing history
+    uint256 public offersCount; // the total number of offers
 
     // Struct for the listing
     struct Listing {
@@ -48,10 +49,11 @@ contract Marketplace is ReentrancyGuard {
 
     // Enter the listing id, get back the Listing Struct. Only valid for listings currently on sale.
     mapping(uint256 => Listing) public listingsForSale;
-    // Enter the tokenid, get back the listingId associated with the token
-    mapping(uint256 => uint256) public tokenListings;
     // Enter offerId, get back the Offer struct. Only valid for offers that are currently active.
     mapping(uint256 => Offer) public pendingOffers;
+
+    // (unused, may use at future instance) -> Enter the tokenid, get back the listingId associated with the token
+    mapping(uint256 => uint256) public tokenListings;
 
     // Events
     event setListing(
@@ -212,8 +214,10 @@ contract Marketplace is ReentrancyGuard {
             msg.sender != listing.seller,
             "You cannot make a bid on your own NFT"
         );
+        uint256 totalOfferPrice = getOfferTotalPrice(_offerPrice);
+        uint _offerPriceCheck = totalOfferPrice - (feePercent * totalOfferPrice);
         // Make sure the offer price is greater than 0
-        require(_offerPrice > 0, "Your bid must be greater than 0");
+        require(_offerPriceCheck > 0, "Your bid must be greater than 0");
         // Make sure listing isn't already sold
         require(
             !listing.sold,
@@ -272,7 +276,7 @@ contract Marketplace is ReentrancyGuard {
     /*
      * Allow sellers to accept an offer made for their listing
      */
-    function acceptOffer(uint256 _offerId) public {
+    function acceptOffer(uint256 _offerId) public payable nonReentrant {
         //require that msg.sender is owner of the listing to accept offer
         Offer memory offer = pendingOffers[_offerId];
         Listing memory listing = listingsForSale[offer.listingId];
@@ -280,13 +284,41 @@ contract Marketplace is ReentrancyGuard {
             msg.sender == listing.seller,
             "You cannot accept an offer on a listing that you do not own"
         );
+        // Get total price required for the listing
+        uint256 _totalPrice = getOfferTotalPrice(_offerId);
+        require(
+            _offerId > 0 && _offerId <= offersCount,
+            "Offer does not exist"
+        );
+        // Check if the buyer sent enough funds
+        require(
+            msg.value >= _totalPrice,
+            "not enough ether to cover listing price and market fee"
+        );
+        // Check if the listing hasn't been sold
+        require(!listing.sold, "listing already sold");
+        // Check if the listing is active
+        require(listing.active, "listing is inactive");
 
-        // purchase listing
-        purchaseListing(offer.listingId);
+        // maybe we can add code that returns extra money sent if there was?
+
+        // Update listing to sold
+        listing.sold = true;
+        // Update listing to inactive. Its sold, cant be sold again
+        listing.active = false;
 
         // remove offer from storage
         delete pendingOffers[_offerId];
-        offers[pendingOffers[_offerId].index].active = false;
+        offer.active = false;
+        offer.accepted = true;
+
+        // Transfer the actual NFT to the buyer
+        listing.nft.transferFrom(address(this), msg.sender, listing.tokenId);
+
+        // Transfer funds from the buyer directly to the seller
+        listing.seller.transfer(offer.price);
+        // Transfer fees from the buyer to the marketplace
+        feeAccount.transfer(_totalPrice - offer.price);
 
         // emit event of an accepted offer
         emit acceptedOffer(
@@ -295,57 +327,23 @@ contract Marketplace is ReentrancyGuard {
             address(listing.nft),
             offer.price
         );
-    }
 
-    /*
-     * Display all listings for sale
-     */
-    function getAllListings()
-        public
-        view
-        returns (uint256[] memory allListings)
-    {
-        if (listingsCount == 0) {
-            return new uint256[](0);
-        } else {
-            uint256[] memory tokenResults = new uint256[](listingsCount);
-
-            uint256 listingId;
-
-            for (listingId = 0; listingId < listingsCount; listingId++) {
-                if(listings[listingId].price != 0) {
-                    tokenResults[listingId] = listings[listingId].tokenId;
-                }
-            }
-            return tokenResults;
-        }
-    }
-
-    /*
-     * Display all users listings for sale
-     */
-    function getUsersListings()
-        public
-        view
-        returns (uint256[] memory usersListings)
-    {
-        if (listingsCount == 0) {
-            return new uint256[](0);
-        } else {
-            uint256[] memory usersResults;
-
-            uint256 listingId;
-
-            for (listingId = 0; listingId < listingsCount; listingId++) {
-                if(listings[listingId].price != 0 && listings[listingId].seller == msg.sender) {
-                    usersResults[listingId] = listings[listingId].tokenId;
-                }
-            }
-            return usersResults;
-        }
+        // emit purchased listing event
+        emit Bought(
+            offer.listingId,
+            address(listing.nft),
+            listing.tokenId,
+            listing.price,
+            listing.seller,
+            msg.sender
+        );
     }
 
     function getTotalPrice(uint256 _listingId) public view returns (uint256) {
         return ((listings[_listingId].price * (100 + feePercent)) / 100);
+    }
+
+    function getOfferTotalPrice(uint256 _offerId) public view returns (uint256) {
+        return((offers[_offerId].price * (100 + feePercent)) / 100);
     }
 }
