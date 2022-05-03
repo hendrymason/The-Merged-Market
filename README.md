@@ -12,37 +12,19 @@ The business model operates similar to traditional marketplaces as well, taking 
 
 The target platform for this application remains to be Quai Network, due to its multi-chain modular architecture. Eventually, it could have the potential to become a multi-layer-1 application upon further testing and protocol upgrades. However, we believe Quai Network will be a perfect fit for initial deployment for implementing a multi-chain application.
 
-## Getting Started
+## Dependencies**
 
-### Dependencies**
-
-* solidity v0.7.0^
-* web3 js v
-* nodejs v
-* npm v
-* truffle v
-* ganache v
+* solidity >=0.7.0 <0.9.0
+* web3 js
+* nodejs
+* npm
+* truffle
+* ganache
 * Register on infura: https://infura.io/register
 
-### Installing(?)**
+## Contributors
 
-* How/where to download your program
-* Any modifications needed to be made to files/folders
-
-### Executing program(?)**
-
-* How to run the program
-* Step-by-step bullets
-```
-code blocks for commands
-```
-
-## Authors**
-
-Contributors names and contact info
-
-Mason Hendry 
-[@0xmheez](https://twitter.com/0xmheez)
+Mason Hendry
 
 Jack Scheerle
 
